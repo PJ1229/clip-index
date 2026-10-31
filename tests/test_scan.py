@@ -84,7 +84,7 @@ def test_default_index_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 
 def test_scan_skips_personal_is_incremental_and_preserves_namespaces(tmp_path: Path):
-    root = tmp_path / "TOSHIBA EXT"
+    root = tmp_path / "External Drive"
     (root / "December").mkdir(parents=True)
     (root / "personal").mkdir()
     keep = root / "December" / "keep.mov"
@@ -206,7 +206,7 @@ def test_index_inside_source_and_missing_ffmpeg(tmp_path: Path, monkeypatch: pyt
 
 
 def test_cli_scan_of_synthetic_clips(tmp_path: Path, needs_ffmpeg: None, capsys: pytest.CaptureFixture[str]):
-    root = tmp_path / "TOSHIBA EXT"
+    root = tmp_path / "External Drive"
     colors = {
         "December/camera/day.mkv": (70, 140, 210),
         "December/05_renders_proxies/warm.mkv": (220, 150, 60),

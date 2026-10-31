@@ -7,8 +7,8 @@ from clip_index.scan import discover
 
 
 def test_project_is_top_level_folder():
-    assert project_name("December/camera/A001.mov", "TOSHIBA EXT") == "December"
-    assert project_name("clip.mov", "TOSHIBA EXT") == "TOSHIBA EXT"
+    assert project_name("December/camera/A001.mov", "External Drive") == "December"
+    assert project_name("clip.mov", "External Drive") == "External Drive"
 
 
 def test_graded_matches_folder_names_only():
@@ -30,7 +30,7 @@ def test_video_names_skip_appledouble_and_odd_types():
 
 
 def test_discover_skips_personal_hidden_and_symlinks(tmp_path: Path):
-    root = tmp_path / "TOSHIBA EXT"
+    root = tmp_path / "External Drive"
     (root / "personal").mkdir(parents=True)
     (root / "personal" / "secret.mov").write_bytes(b"x")
     (root / "December" / "Personal").mkdir(parents=True)

@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            '  clip-index scan "/Volumes/TOSHIBA EXT"\n'
+            '  clip-index scan "/Volumes/Footage"\n'
             "  clip-index query --face --lighting golden --motion static "
             "--min-brightness 0.5 --project december --graded\n"
             "  clip-index query --lighting night --json\n"

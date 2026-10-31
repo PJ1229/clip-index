@@ -21,7 +21,7 @@ The footage drive is not part of the index. `clip-index scan` never creates, ren
 {
   "schema_version": 1,
   "tool": "clip-index",
-  "root": "/Volumes/TOSHIBA EXT"
+  "root": "/Volumes/Footage"
 }
 ```
 

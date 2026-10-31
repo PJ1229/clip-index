@@ -138,7 +138,10 @@ def iter_sampled_frames(
     finally:
         if proc.poll() is None:
             proc.kill()
-            proc.wait(timeout=5)
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                pass  # never let a stuck ffmpeg abort the whole scan
         drain.join(timeout=5)
 
 

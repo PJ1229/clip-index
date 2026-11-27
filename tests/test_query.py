@@ -171,3 +171,63 @@ def test_help_and_version():
 def test_min_brightness_range(tmp_path: Path):
     code = main(["query", "--index", str(tmp_path), "--min-brightness", "2"])
     assert code == 1
+
+
+def _autolog_record(path: str, sport: str, scene: str, summary: str, events=None) -> dict:
+    rec = _record(path)
+    rec["autolog"] = {
+        "schema": 1,
+        "sport": sport,
+        "scene_type": scene,
+        "summary": summary,
+        "tags": [],
+        "events": events or [],
+    }
+    return rec
+
+
+def test_autolog_filters_sport_scene_and_text():
+    game = _autolog_record(
+        "um-athletics/hockey/a.mov", "IHM", "game_action", "Game action on the ice.",
+        events=[{"t": 4.0, "kind": "action", "tag": "goal_celebration", "text": "Goal celebration"}],
+    )
+    bench = _autolog_record("um-athletics/hockey/b.mov", "IHM", "bench", "Bench, players seated.")
+    soccer = _autolog_record("um-athletics/sow/c.mov", "SOW", "game_action", "Game action on the pitch.")
+    plain = _record("January/day.mov")
+
+    assert matches(game, Query(sport="ihm"))
+    assert not matches(soccer, Query(sport="IHM"))
+    assert matches(game, Query(sport="IHM", scene="GAME_ACTION"))
+    assert not matches(bench, Query(scene="game_action"))
+    assert matches(game, Query(text="celebration"))
+    assert matches(bench, Query(text="seated"))
+    assert not matches(soccer, Query(text="celebration"))
+    # A clip AutoLog never processed does not match an autolog filter,
+    # but still matches social-only queries.
+    assert not matches(plain, Query(sport="IHM"))
+    assert matches(plain, Query())
+    # autolog and social filters combine.
+    assert not matches(game, Query(sport="IHM", motion="pan"))
+
+
+def test_text_output_shows_autolog_summary():
+    rec = _autolog_record("um-athletics/hockey/a.mov", "IHM", "game_action", "Game action on the ice.")
+    out = format_text([rec])
+    assert "autolog: sport=IHM  scene=game_action  Game action on the ice." in out
+
+
+def test_query_cli_autolog_flags(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    index = tmp_path / "idx"
+    store = IndexStore(index, scan_root=None)
+    store.ensure()
+    lines = [
+        _autolog_record("um-athletics/hockey/a.mov", "IHM", "game_action", "Game action on the ice."),
+        _autolog_record("um-athletics/sow/c.mov", "SOW", "fans", "Fans in the stands."),
+    ]
+    (index / "index.jsonl").write_text("".join(json.dumps(r) + "\n" for r in lines))
+    assert main(["query", "--index", str(index), "--sport", "SOW", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert [r["path"] for r in found] == ["um-athletics/sow/c.mov"]
+    assert main(["query", "--index", str(index), "--text", "ice"]) == 0
+    out = capsys.readouterr().out
+    assert "um-athletics/hockey/a.mov" in out and "sow/c.mov" not in out

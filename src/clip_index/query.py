@@ -18,6 +18,10 @@ class Query:
     project: str | None = None
     graded: bool = False
     tag: str | None = None
+    # autolog namespace (written by um-autolog `autolog clip-index`)
+    sport: str | None = None
+    scene: str | None = None
+    text: str | None = None
 
 
 def load_records(index_dir: Path) -> list[dict]:
@@ -57,7 +61,37 @@ def matches(record: dict, query: Query) -> bool:
         wanted = query.tag.lower()
         if wanted not in {str(tag).lower() for tag in tags}:
             return False
+    if query.sport or query.scene or query.text:
+        return _matches_autolog(record.get("autolog"), query)
     return True
+
+
+def _matches_autolog(autolog: object, query: Query) -> bool:
+    """Filters on um-autolog's namespace. Clips AutoLog has not seen never match."""
+    if not isinstance(autolog, dict):
+        return False
+    if query.sport and str(autolog.get("sport") or "").upper() != query.sport.upper():
+        return False
+    if query.scene and str(autolog.get("scene_type") or "").lower() != query.scene.lower():
+        return False
+    if query.text and query.text.lower() not in autolog_text(autolog):
+        return False
+    return True
+
+
+def autolog_text(autolog: dict) -> str:
+    """Lower-cased searchable text: summary, tags, and event tags/text."""
+    parts: list[str] = [str(autolog.get("summary") or "")]
+    tags = autolog.get("tags")
+    if isinstance(tags, list):
+        parts.extend(str(tag) for tag in tags)
+    events = autolog.get("events")
+    if isinstance(events, list):
+        for event in events:
+            if isinstance(event, dict):
+                parts.append(str(event.get("tag") or ""))
+                parts.append(str(event.get("text") or ""))
+    return " ".join(part for part in parts if part).lower()
 
 
 def run_query(index_dir: Path, query: Query) -> list[dict]:
@@ -104,7 +138,15 @@ def _format_one(record: dict) -> str:
         f"motion={social.get('camera_motion') or ''}  brightness={brightness:.2f}  "
         f"face={face_text}  {duration:.1f}s"
     )
-    return f"{header}\n{detail}\n  calm: {calm_text}"
+    text = f"{header}\n{detail}\n  calm: {calm_text}"
+    autolog = record.get("autolog")
+    if isinstance(autolog, dict):
+        bits = [f"sport={autolog.get('sport') or ''}", f"scene={autolog.get('scene_type') or ''}"]
+        summary = str(autolog.get("summary") or "").strip()
+        if summary:
+            bits.append(summary)
+        text += "\n  autolog: " + "  ".join(bits)
+    return text
 
 
 def _fmt_span(span: object) -> str:

@@ -28,6 +28,10 @@ CALM_MAX_SPAN = 3.0
 CALM_KEEP = 3
 CALM_STEP = 0.25
 FACE_SUBJECT_MIN = 0.08
+# A single Haar hit is usually texture (crowds, jersey numbers, foliage).
+# "visible" needs the face in at least this many sampled frames, unless the
+# clip is so short that it only has a frame or two to vote with.
+FACE_VISIBLE_MIN_HITS = 2
 
 _LIGHT_PRIORITY = ("night", "snow", "golden", "overcast", "day")
 
@@ -68,9 +72,13 @@ def frame_features(rgb: np.ndarray) -> dict[str, float]:
     green = float(pixels[..., 1].mean())
     blue = float(pixels[..., 2].mean())
     brightness = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255.0
-    peak = max(red, green, blue)
-    floor = min(red, green, blue)
-    saturation = 0.0 if peak < 1.0 else (peak - floor) / peak
+    # Mean of per-pixel saturation. The saturation of the *mean* colour is
+    # near zero for any frame that mixes hues (a red jersey on a blue court
+    # averages to grey), which pushed most colourful clips into "overcast".
+    peak = pixels.max(axis=-1)
+    floor = pixels.min(axis=-1)
+    per_pixel = np.where(peak >= 1.0, (peak - floor) / np.maximum(peak, 1.0), 0.0)
+    saturation = float(per_pixel.mean())
     warmth = (red - blue) / 255.0
     return {
         "brightness": brightness,
@@ -152,6 +160,12 @@ def to_flow_gray(rgb: np.ndarray) -> np.ndarray:
 
 
 def mean_flow_vector(prev_gray: np.ndarray, gray: np.ndarray) -> tuple[float, float]:
+    """Global (camera) motion between two proxies.
+
+    The per-pixel median, not the mean: on a locked-off shot of a game the
+    players can cover a third of the frame, and their motion dragged the
+    mean over the static threshold, so tripod shots read as handheld.
+    """
     levels = 3 if min(prev_gray.shape) >= 80 else 2
     flow = cv2.calcOpticalFlowFarneback(
         prev_gray,
@@ -165,7 +179,7 @@ def mean_flow_vector(prev_gray: np.ndarray, gray: np.ndarray) -> tuple[float, fl
         1.1,
         0,
     )
-    return float(flow[..., 0].mean()), float(flow[..., 1].mean())
+    return float(np.median(flow[..., 0])), float(np.median(flow[..., 1]))
 
 
 def measure_flow(frames: Sequence[np.ndarray]) -> list[tuple[float, float]]:
@@ -326,7 +340,7 @@ def classify_frames(
         raise ValueError("no frames to classify")
 
     fraction = face_hits / count
-    face_visible = {"visible": face_hits > 0, "fraction": round(fraction, 4)}
+    face_visible = {"visible": face_is_visible(face_hits, count), "fraction": round(fraction, 4)}
     subject = majority(subject_labels, SUBJECTS)
     if fraction >= FACE_SUBJECT_MIN:
         subject = "person"
@@ -339,6 +353,13 @@ def classify_frames(
         "camera_motion": camera_motion_from_vectors(vectors),
         "calm_moments": find_calm_moments(flow_samples, duration),
     }
+
+
+def face_is_visible(hits: int, frames: int) -> bool:
+    """Face in at least FACE_VISIBLE_MIN_HITS samples (or every sample of a tiny clip)."""
+    if hits <= 0:
+        return False
+    return hits >= min(FACE_VISIBLE_MIN_HITS, frames)
 
 
 def _allowed(label: object, choices: tuple[str, ...]) -> str | None:

@@ -79,7 +79,7 @@ Rules for every writer:
 | `project` | string | Top-level folder under the scan root. If the clip is directly in the root, the root folder's name. |
 | `graded` | bool | True when any parent folder name contains `graded` or `renders_proxies`, case-insensitive. `05_renders_proxies` and `02_graded` match. The filename does not. `grades` and `proxies` do not. |
 | `subject` | string | `person`, `scenery`, or `object` |
-| `face_visible` | object | `{"visible": bool, "fraction": number}`. `fraction` is in `[0, 1]`, the share of sampled frames with at least one detected frontal face. `visible` is true when that count is at least one. |
+| `face_visible` | object | `{"visible": bool, "fraction": number}`. `fraction` is in `[0, 1]`, the share of sampled frames with at least one detected frontal face. `visible` is true when that count is at least two (or one, for a clip with a single sampled frame); a lone detection is treated as noise. |
 | `lighting` | string | `golden`, `day`, `night`, `snow`, or `overcast` |
 | `brightness` | number | mean Rec. 709 luma of the sampled frames, 0 to 1. `Y = (0.2126 R + 0.7152 G + 0.0722 B) / 255` |
 | `camera_motion` | string | `static`, `handheld`, or `pan` |
@@ -87,6 +87,8 @@ Rules for every writer:
 | `tags` | array of strings | labels produced with the classification. Free-form for readers. This writer replaces the array on each analysis. |
 
 `subject` is `person` when `fraction` is at least 0.08, even if a scenery model disagrees. Below that, a face can still be `visible`.
+
+Records written before 2026-11-27 used a looser rule (one frame was enough), per-frame saturation of the mean colour for `lighting`, and mean optical flow for `camera_motion`. Those records stay as they are until the clip is rescanned with `--force`.
 
 A calm window is one where every sampled optical-flow interval stays in the static range. A pan or a shake inside the window drops it. Times follow the sample clock (frame index divided by the sample rate, default 2 Hz), not a timecode track.
 

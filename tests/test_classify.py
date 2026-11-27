@@ -7,10 +7,12 @@ import pytest
 
 from clip_index.classify import (
     FACE_SUBJECT_MIN,
+    FACE_VISIBLE_MIN_HITS,
     HaarFaceDetector,
     build_tags,
     camera_motion_from_vectors,
     classify_frames,
+    face_is_visible,
     find_calm_moments,
     frame_features,
     label_lighting,
@@ -83,7 +85,7 @@ def test_subject_from_pixels_and_from_faces():
     assert out["lighting"] == "night"
     assert out["brightness"] < 0.1
 
-    # One hit in twenty is under the person threshold but still visible.
+    # One hit in twenty is a stray Haar match: not visible, not a person.
     hits = {"n": 0}
 
     def once(_frame):
@@ -96,7 +98,7 @@ def test_subject_from_pixels_and_from_faces():
         duration=10,
         face_detector=type("Det", (), {"frame_has_face": staticmethod(once)})(),
     )
-    assert rare["face_visible"]["visible"] is True
+    assert rare["face_visible"]["visible"] is False
     assert rare["face_visible"]["fraction"] == 0.05
     assert rare["face_visible"]["fraction"] < FACE_SUBJECT_MIN
     assert rare["subject"] == "scenery"
@@ -286,3 +288,51 @@ def test_faces_override_clip_subject():
     )
     assert out["subject"] == "person"
     assert out["lighting"] == "day"
+
+
+def test_face_visible_needs_more_than_one_stray_hit():
+    assert FACE_VISIBLE_MIN_HITS == 2
+    assert face_is_visible(0, 20) is False
+    assert face_is_visible(1, 20) is False
+    assert face_is_visible(2, 20) is True
+    # A one-frame clip can only vote once.
+    assert face_is_visible(1, 1) is True
+    assert face_is_visible(1, 2) is False
+
+    hits = iter([True, False, True, False, False, False])
+    det = type("Det", (), {"frame_has_face": staticmethod(lambda _f: next(hits))})()
+    dark = _solid((5, 5, 6), (48, 64))
+    out = classify_frames([dark] * 6, sample_fps=2, duration=3, face_detector=det)
+    assert out["face_visible"] == {"visible": True, "fraction": round(2 / 6, 4)}
+    assert "face" in build_tags({**out, "graded": False})
+
+
+def test_mixed_hue_frame_is_not_overcast():
+    # Red jersey half, blue court half: the mean colour is a dull purple, but
+    # every pixel is fully saturated.
+    frame = np.zeros((90, 160, 3), dtype=np.uint8)
+    frame[:, :80] = (200, 30, 30)
+    frame[:, 80:] = (30, 30, 200)
+    features = frame_features(frame)
+    assert features["saturation"] > 0.5
+    assert label_lighting(features) != "overcast"
+    # A genuinely grey frame still is.
+    assert label_lighting(frame_features(_solid((150, 150, 155)))) == "overcast"
+
+
+def test_tripod_shot_with_a_moving_player_is_static():
+    # Locked-off background, one textured "player" crossing ~17% of the frame.
+    # The mean flow of this sequence is ~1.2 px (over STATIC_MAX); the camera
+    # did not move, so the label must be static.
+    import cv2
+
+    rng = np.random.default_rng(7)
+    background = cv2.GaussianBlur(rng.integers(0, 255, size=(120, 200), dtype=np.uint8), (7, 7), 2)
+    player = cv2.GaussianBlur(rng.integers(0, 255, size=(60, 70), dtype=np.uint8), (7, 7), 2)
+    frames = []
+    for step in range(6):
+        gray = background.copy()
+        x = 10 + step * 6
+        gray[20:80, x : x + 70] = player
+        frames.append(np.dstack([gray, gray, gray]))
+    assert camera_motion_from_vectors(measure_flow(frames)) == "static"

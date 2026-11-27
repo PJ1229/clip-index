@@ -35,6 +35,8 @@ December/05_renders_proxies/hero.mov
 
 `--json` prints the same matches as a JSON array. Lighting is `golden`, `day`, `night`, `snow`, or `overcast`. Motion is `static`, `handheld`, or `pan`. `--project` is a case-insensitive substring of the top-level folder.
 
+Clips that um-autolog has processed also carry an `autolog` object (see SCHEMA.md). `--sport IHM`, `--scene game_action` and `--text celebration` (a substring of the AutoLog summary, tags or events) filter on it, and the text output adds an `autolog:` line. Clips that AutoLog hasn't seen never match those three filters.
+
 ## Setup
 
 Python 3.12, plus `ffmpeg` and `ffprobe` on `PATH` (`brew install ffmpeg` on a Mac).

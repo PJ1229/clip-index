@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  clip-index query --face --lighting golden --motion static "
             "--min-brightness 0.5 --project december --graded\n"
             "  clip-index query --lighting night --json\n"
+            "  clip-index query --sport IHM --scene game_action --motion static\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"clip-index {__version__}")
@@ -77,6 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     query_p.add_argument("--graded", action="store_true", help="only graded or renders-proxy bins")
     query_p.add_argument("--tag", help="exact social tag, case-insensitive")
+    query_p.add_argument("--sport", help="AutoLog sport code, e.g. IHM, SOW, BKW (autolog namespace)")
+    query_p.add_argument("--scene", help="AutoLog scene type, e.g. game_action, bench, fans")
+    query_p.add_argument(
+        "--text",
+        help="case-insensitive substring of the AutoLog summary, tags, or events",
+    )
     query_p.add_argument("--json", action="store_true", help="print matching records as JSON")
     return parser
 
@@ -125,6 +132,9 @@ def _cmd_query(args: argparse.Namespace) -> int:
         project=args.project,
         graded=args.graded,
         tag=args.tag,
+        sport=args.sport,
+        scene=args.scene,
+        text=args.text,
     )
     records = run_query(index, query)
     if args.json:
